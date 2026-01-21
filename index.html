@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Seguro de Obras</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .tela { display: none; } /* Esconde todas as telas por padrão */
+        .tela-ativa { display: block; animation: fadeIn 0.5s; } /* Mostra a ativa */
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .card-resumo { transition: transform 0.2s; }
+        .card-resumo:hover { transform: translateY(-5px); }
+    </style>
+</head>
+<body class="bg-light">
+
+    <div id="telaLogin" class="tela container py-5" style="height: 100vh;">
+        <div class="row justify-content-center align-items-center h-100">
+            <div class="col-md-4">
+                <div class="card shadow-lg border-0">
+                    <div class="card-body p-5">
+                        <div class="text-center mb-4">
+                            <h3>🔐 Acesso Restrito</h3>
+                            <p class="text-muted">Faça login para acessar os relatórios</p>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Usuário</label>
+                            <input type="text" id="loginUser" class="form-control form-control-lg" placeholder="ex: admin">
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Senha</label>
+                            <input type="password" id="loginPass" class="form-control form-control-lg" placeholder="******">
+                        </div>
+                        
+                        <button onclick="fazerLogin()" class="btn btn-primary w-100 btn-lg">Entrar no Sistema</button>
+                        
+                        <div id="msgErro" class="alert alert-danger mt-3 text-center" style="display:none"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="telaDashboard" class="tela container py-5">
+        
+        <div class="d-flex justify-content-between align-items-center mb-5 border-bottom pb-3">
+            <div>
+                <h1 class="h3 mb-0">📊 Gestão de Mão de Obra</h1>
+                <small class="text-muted">Logado como: <strong id="usuarioLogado">...</strong></small>
+            </div>
+            <button onclick="fazerLogout()" class="btn btn-outline-danger">Sair / Logout</button>
+        </div>
+
+        <div class="card p-4 shadow-sm mb-4 border-0">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">Selecione a Data</label>
+                    <input type="date" id="dataInput" class="form-control form-control-lg">
+                </div>
+                <div class="col-md-3">
+                    <button onclick="buscarDados()" class="btn btn-primary w-100 btn-lg">🔍 Buscar Relatórios</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="loading" class="text-center my-5" style="display:none">
+            <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status"></div>
+            <p class="mt-2 fs-5 text-muted">Processando relatórios e consolidando dados...</p>
+        </div>
+
+        <div id="resultArea" style="display:none">
+            
+            <div class="row mb-4 text-center g-3">
+                <div class="col-md-4">
+                    <div class="card card-resumo bg-primary text-white p-3 border-0 shadow-sm">
+                        <h2 class="display-6 fw-bold"><span id="totalColaboradores">0</span></h2>
+                        <small class="text-white-50 text-uppercase fw-bold">Colaboradores</small>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card card-resumo bg-success text-white p-3 border-0 shadow-sm">
+                        <h2 class="display-6 fw-bold"><span id="totalObras">0</span></h2>
+                        <small class="text-white-50 text-uppercase fw-bold">Obras Ativas</small>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card card-resumo bg-secondary text-white p-3 border-0 shadow-sm">
+                        <h2 class="display-6 fw-bold"><span id="totalRelatorios">0</span></h2>
+                        <small class="text-white-50 text-uppercase fw-bold">Relatórios Baixados</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end mb-3">
+                <button onclick="exportarExcel()" class="btn btn-success">
+                    📥 Baixar Planilha (.csv)
+                </button>
+            </div>
+
+            <div class="card shadow-sm border-0">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover align-middle mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th scope="col">Funcionário</th>
+                                <th scope="col">Função</th>
+                                <th scope="col">Obra (Origem)</th>
+                                <th scope="col" class="text-end">ID Relatório</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabelaCorpo">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3000';
+        let dadosGlobais = []; // Guarda dados para exportar CSV
+
+        // 1. Verifica login ao abrir
+        window.onload = () => {
+            const token = localStorage.getItem('token');
+            const user = localStorage.getItem('username');
+            
+            if (token) {
+                document.getElementById('usuarioLogado').innerText = user || 'Usuário';
+                mostrarTela('telaDashboard');
+            } else {
+                mostrarTela('telaLogin');
+            }
+        };
+
+        function mostrarTela(id) {
+            document.querySelectorAll('.tela').forEach(t => t.classList.remove('tela-ativa'));
+            document.getElementById(id).classList.add('tela-ativa');
+        }
+
+        // 2. Função de Login
+        async function fazerLogin() {
+            const user = document.getElementById('loginUser').value;
+            const pass = document.getElementById('loginPass').value;
+            const msgErro = document.getElementById('msgErro');
+
+            // Limpa erros anteriores
+            msgErro.style.display = 'none';
+
+            try {
+                const res = await fetch(`${API_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: user, password: pass })
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('username', data.username);
+                    document.getElementById('usuarioLogado').innerText = data.username;
+                    mostrarTela('telaDashboard');
+                } else {
+                    msgErro.innerText = data.erro || 'Erro ao logar';
+                    msgErro.style.display = 'block';
+                }
+            } catch (e) {
+                msgErro.innerText = 'Erro de conexão com o servidor';
+                msgErro.style.display = 'block';
+            }
+        }
+
+        function fazerLogout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('username');
+            mostrarTela('telaLogin');
+            // Limpa dados da tela
+            document.getElementById('resultArea').style.display = 'none';
+            document.getElementById('dataInput').value = '';
+        }
+
+        // 3. Função de Buscar Dados (AQUI ESTÁ A MÁGICA DA TABELA)
+        async function buscarDados() {
+            const data = document.getElementById('dataInput').value;
+            const token = localStorage.getItem('token');
+            
+            if (!data) return alert('Selecione uma data!');
+
+            // UI Changes
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('resultArea').style.display = 'none';
+            document.getElementById('tabelaCorpo').innerHTML = ''; // Limpa tabela antiga
+
+            try {
+                const response = await fetch(`${API_URL}/api/colaboradores?data=${data}`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}` // Manda o crachá
+                    }
+                });
+
+                // Se o token venceu
+                if (response.status === 401 || response.status === 403) {
+                    alert('Sessão expirada. Por favor, faça login novamente.');
+                    fazerLogout();
+                    return;
+                }
+
+                const json = await response.json();
+
+                if (json.erro) throw new Error(json.erro);
+
+                // --- PREENCHENDO A TELA ---
+                dadosGlobais = json.listaColaboradores; // Salva para o Excel
+
+                // 1. Cards
+                document.getElementById('totalColaboradores').innerText = json.resumo.colaboradores;
+                document.getElementById('totalObras').innerText = json.resumo.obras;
+                document.getElementById('totalRelatorios').innerText = json.resumo.relatorios;
+
+                // 2. Tabela (Aqui transformamos JSON em HTML)
+                if (dadosGlobais.length === 0) {
+                    document.getElementById('tabelaCorpo').innerHTML = '<tr><td colspan="4" class="text-center p-4">Nenhum colaborador encontrado para esta data.</td></tr>';
+                } else {
+                    const linhasHTML = dadosGlobais.map(item => `
+                        <tr>
+                            <td class="fw-bold">${item.funcionario}</td>
+                            <td><span class="badge bg-light text-dark border">${item.funcao || 'Não inf.'}</span></td>
+                            <td>${item.origemObra}</td>
+                            <td class="text-end text-muted"><small>#${item.idRelatorio.slice(-6)}</small></td>
+                        </tr>
+                    `).join('');
+                    
+                    document.getElementById('tabelaCorpo').innerHTML = linhasHTML;
+                }
+
+                document.getElementById('resultArea').style.display = 'block';
+
+            } catch (error) {
+                console.error(error);
+                alert('Ocorreu um erro: ' + error.message);
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        // 4. Exportar Excel
+        function exportarExcel() {
+            if (dadosGlobais.length === 0) return alert("Sem dados para exportar");
+
+            let csv = "Funcionario;Funcao;Obra;Data;ID_Relatorio\n";
+
+            dadosGlobais.forEach(row => {
+                // Tratamento simples para evitar quebra de CSV se tiver ponto e vírgula no nome
+                const func = row.funcionario ? row.funcionario.replace(/;/g, ' ') : '';
+                const obra = row.origemObra ? row.origemObra.replace(/;/g, ' ') : '';
+                
+                csv += `${func};${row.funcao};${obra};${row.data};${row.idRelatorio}\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", `MaoDeObra_${dadosGlobais[0].data}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>

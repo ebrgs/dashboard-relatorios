@@ -1,0 +1,17 @@
+# Dependências do Node (são gigantes e instaláveis via npm install)
+node_modules/
+
+# Variáveis de Ambiente (SEGURANÇA MÁXIMA: NUNCA SUBIR ISSO)
+.env
+
+# Banco de dados Local (Não queremos subir os dados dos usuários de teste)
+database.sqlite
+*.sqlite
+*.db
+
+# Arquivos de sistema operacional
+.DS_Store
+Thumbs.db
+
+# Logs de erro do NPM
+npm-debug.log*
