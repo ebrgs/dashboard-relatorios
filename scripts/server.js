@@ -3,25 +3,38 @@ import express from 'express';
 import cors from 'cors';
 import pLimit from "p-limit";
 import { api } from "./api.js";
-
-// --- SEGURANÇA ---
-import sqlite3 from 'sqlite3';
-import { open } from 'sqlite';
+import pg from 'pg'; // Usando pacote 'pg' em vez de sqlite
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
+const { Pool } = pg;
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000; // Render define a porta automaticamente
 const LIMITE_REQUISICOES_SIMULTANEAS = 5;
-const JWT_SECRET = process.env.JWT_SECRET; 
+const JWT_SECRET = process.env.JWT_SECRET;
+
+// --- CONEXÃO COM POSTGRESQL ---
+const connectionString = process.env.DATABASE_URL;
 
 app.use(cors());
 app.use(express.json());
 
-// Variável global para o banco
-let db;
+// --- CONEXÃO COM POSTGRESQL ---
+// O Render fornece a DATABASE_URL automaticamente nas variáveis de ambiente
+const usarSSL = connectionString && connectionString.includes('render.com');
 
-// --- FUNÇÕES DA API EXTERNA (Sua lógica de negócio) ---
+const pool = new Pool({
+    connectionString: connectionString,
+    ssl: usarSSL ? { rejectUnauthorized: false } : false
+});
+
+// Teste de conexão ao iniciar
+pool.connect()
+    .then(() => console.log('🐘 PostgreSQL conectado com sucesso!'))
+    .catch(err => console.error('Erro ao conectar no PostgreSQL:', err));
+
+
+// --- FUNÇÕES DA API EXTERNA ---
 async function buscarTodasObras() {
     console.log('📡 Buscando obras...');
     const response = await api.get('/obras');
@@ -62,7 +75,7 @@ async function buscarDetalhesDoRelatorio(itemParaBuscar) {
 // --- MIDDLEWARE DE AUTENTICAÇÃO ---
 function autenticarToken(req, res, next) {
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1]; 
+    const token = authHeader && authHeader.split(' ')[1];
 
     if (!token) return res.status(401).json({ erro: 'Acesso negado. Faça login.' });
 
@@ -75,23 +88,18 @@ function autenticarToken(req, res, next) {
 
 // --- ROTAS ---
 
-// 1. Rota de Login (Pública)
 app.post('/auth/login', async (req, res) => {
     const { username, password } = req.body;
 
     try {
-        // Agora temos certeza que 'db' existe
-        const user = await db.get('SELECT * FROM users WHERE username = ?', username);
+        // MUDANÇA: Sintaxe $1 em vez de ?
+        const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+        const user = result.rows[0];
 
-        if (!user) {
-            return res.status(401).json({ erro: 'Usuário ou senha incorretos' });
-        }
+        if (!user) return res.status(401).json({ erro: 'Usuário ou senha incorretos' });
 
         const senhaValida = await bcrypt.compare(password, user.password);
-
-        if (!senhaValida) {
-            return res.status(401).json({ erro: 'Usuário ou senha incorretos' });
-        }
+        if (!senhaValida) return res.status(401).json({ erro: 'Usuário ou senha incorretos' });
 
         const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '8h' });
 
@@ -102,18 +110,16 @@ app.post('/auth/login', async (req, res) => {
     }
 });
 
-// 2. Rota de Relatórios (Protegida)
 app.get('/api/colaboradores', autenticarToken, async (req, res) => {
     try {
         const { data } = req.query;
-
         if (!data) return res.status(400).json({ erro: 'Data obrigatória' });
 
         console.log(`🚀 Usuário ${req.user.username} pediu dados de: ${data}`);
 
         const obras = await buscarTodasObras();
-        
         const limit = pLimit(LIMITE_REQUISICOES_SIMULTANEAS);
+        
         const promessasListagem = obras.map(obra => limit(() => buscarListaRelatoriosDaObra(obra, data)));
         const resultadosListagem = await Promise.all(promessasListagem);
         const todosRelatoriosEncontrados = resultadosListagem.flat();
@@ -150,21 +156,6 @@ app.get('/api/colaboradores', autenticarToken, async (req, res) => {
     }
 });
 
-// --- INICIALIZAÇÃO CORRIGIDA ---
-// Só iniciamos o servidor DEPOIS que o banco conecta
-(async () => {
-    try {
-        db = await open({
-            filename: './database.sqlite',
-            driver: sqlite3.Database
-        });
-        console.log('📂 Banco de dados conectado com sucesso.');
-
-        // Somente agora ligamos o servidor
-        app.listen(PORT, () => {
-            console.log(`🔒 Servidor Seguro rodando em http://localhost:${PORT}`);
-        });
-    } catch (erro) {
-        console.error('Erro fatal ao iniciar banco de dados:', erro);
-    }
-})();
+app.listen(PORT, () => {
+    console.log(`🔥 Servidor rodando na porta ${PORT}`);
+});

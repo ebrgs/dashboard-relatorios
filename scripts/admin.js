@@ -1,50 +1,57 @@
-// admin.js
-import sqlite3 from 'sqlite3';
-import { open } from 'sqlite';
+import 'dotenv/config'; // Precisamos ler o .env para pegar a URL do banco
+import pg from 'pg';
 import bcrypt from 'bcryptjs';
 
+const { Pool } = pg;
+
+// Verifica se temos a URL do banco configurada (no .env ou direto no comando)
+const connectionString = process.env.DATABASE_URL;
+
+if (!connectionString) {
+    console.error("❌ Erro: DATABASE_URL não definida no arquivo .env");
+    process.exit(1);
+}
+
+const pool = new Pool({
+    connectionString: connectionString,
+    ssl: { rejectUnauthorized: false }
+});
+
 async function criarUsuario(usuario, senha) {
-    // 1. Abre (ou cria) o banco de dados
-    const db = await open({
-        filename: './database.sqlite',
-        driver: sqlite3.Database
-    });
-
-    // 2. Cria a tabela se não existir
-    await db.exec(`
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE,
-            password TEXT
-        )
-    `);
-
     try {
-        // 3. Criptografa a senha (gera um hash)
+        // 1. Cria tabela se não existir (Sintaxe Postgres: SERIAL em vez de AUTOINCREMENT)
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL
+            );
+        `);
+
+        // 2. Criptografa
         const senhaCriptografada = await bcrypt.hash(senha, 10);
 
-        // 4. Insere no banco
-        await db.run(
-            'INSERT INTO users (username, password) VALUES (?, ?)',
-            usuario,
-            senhaCriptografada
+        // 3. Insere (Sintaxe Postgres: $1, $2)
+        await pool.query(
+            'INSERT INTO users (username, password) VALUES ($1, $2)',
+            [usuario, senhaCriptografada]
         );
 
-        console.log(`✅ Usuário "${usuario}" criado com sucesso!`);
+        console.log(`✅ Usuário "${usuario}" criado com sucesso no PostgreSQL!`);
     } catch (error) {
-        if (error.message.includes('UNIQUE constraint failed')) {
+        if (error.code === '23505') { // Código de erro do Postgres para registro duplicado
             console.error(`❌ Erro: O usuário "${usuario}" já existe.`);
         } else {
             console.error('❌ Erro ao criar usuário:', error);
         }
+    } finally {
+        await pool.end(); // Fecha conexão
     }
 }
 
-// --- COMO USAR ---
-// Pegamos os argumentos do terminal: node admin.js usuario senha
 const args = process.argv.slice(2);
 if (args.length < 2) {
-    console.log("Use: node admin.js <nome_usuario> <senha>");
+    console.log("Use: node admin.js <usuario> <senha>");
 } else {
     criarUsuario(args[0], args[1]);
 }
