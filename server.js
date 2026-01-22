@@ -10,8 +10,10 @@ import jwt from 'jsonwebtoken';
 const { Pool } = pg;
 const app = express();
 const PORT = process.env.PORT || 3000; // Render define a porta automaticamente
-const LIMITE_REQUISICOES_SIMULTANEAS = 5;
+const LIMITE_REQUISICOES_SIMULTANEAS = 2;
 const JWT_SECRET = process.env.JWT_SECRET;
+
+app.timeout = 300000;
 
 // --- CONEXÃO COM POSTGRESQL ---
 const connectionString = process.env.DATABASE_URL;
@@ -41,20 +43,52 @@ async function buscarTodasObras() {
     return response.data;
 }
 
+// async function buscarListaRelatoriosDaObra(obra, dataAlvo) {
+//     try {
+//         const response = await api.get(`/obras/${obra._id}/relatorios`, {
+//             params: { dataInicio: dataAlvo, dataFim: dataAlvo }
+//         });
+//         const lista = Array.isArray(response.data) ? response.data : [];
+//         return lista.map(relatorioResumido => ({
+//             obraId: obra._id,
+//             obraNome: obra.nome,
+//             relatorioId: relatorioResumido._id,
+//             data: dataAlvo
+//         }));
+//     } catch (error) {
+//         return [];
+//     }
+// }
 async function buscarListaRelatoriosDaObra(obra, dataAlvo) {
     try {
+        console.log(`⏳ Buscando relatórios da obra: ${obra.nome}...`);
+        
+        // Adicionamos timeout na chamada do Axios também (30 segundos por requisição)
         const response = await api.get(`/obras/${obra._id}/relatorios`, {
-            params: { dataInicio: dataAlvo, dataFim: dataAlvo }
+            params: { dataInicio: dataAlvo, dataFim: dataAlvo },
+            timeout: 30000 
         });
+
         const lista = Array.isArray(response.data) ? response.data : [];
+        
+        if (lista.length > 0) {
+            console.log(`✅ ACHOU! Obra ${obra.nome} tem ${lista.length} relatórios.`);
+        } else {
+            console.log(`⚠️ Obra ${obra.nome}: Nenhum relatório encontrado.`);
+        }
+
         return lista.map(relatorioResumido => ({
             obraId: obra._id,
             obraNome: obra.nome,
             relatorioId: relatorioResumido._id,
             data: dataAlvo
         }));
+
     } catch (error) {
-        return [];
+        // Agora vamos ver o erro real no Log do Render
+        const msgErro = error.response ? `Status ${error.response.status}` : error.message;
+        console.error(`❌ ERRO na Obra ${obra.nome}: ${msgErro}`);
+        return []; // Retorna vazio para não travar o processo todo
     }
 }
 
