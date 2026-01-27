@@ -166,9 +166,10 @@ app.get('/api/colaboradores', autenticarToken, async (req, res) => {
             const listaPessoas = relatorio.maoDeObra?.personalizada || [];
             const pessoasFormatadas = listaPessoas.map(pessoa => ({
                 funcionario: pessoa.nome,
+                matricula: pessoa.nome.replace(/.*?\(([^)]*)\).*/, "$1"),
                 funcao: pessoa.funcao,
                 origemObra: r.meta.obraNome,
-                idRelatorio: r.meta.numero,
+                idRelatorio: relatorio.numero,
                 data: data,
                 tipo: 'Pessoa'
             }));
@@ -190,7 +191,7 @@ app.get('/api/colaboradores', autenticarToken, async (req, res) => {
                     funcionario: equip.descricao || "Equipamento Sem Nome",
                     funcao: equip.operador ? `Op: ${equip.operador.nome}` : "Maquinário",
                     origemObra: r.meta.obraNome,
-                    idRelatorio: r.meta.numero,
+                    idRelatorio: relatorio.numero,
                     data: data,
                     tipo: 'Equipamento'
                 }));

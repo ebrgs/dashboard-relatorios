@@ -117,6 +117,7 @@
                         <thead class="table-dark">
                             <tr>
                                 <th scope="col">Funcionário</th>
+                                <th scope="col">Matricula</th>
                                 <th scope="col">Função</th>
                                 <th scope="col">Obra (Origem)</th>
                                 <th scope="col" class="text-end">ID Relatório</th>
@@ -260,6 +261,7 @@
                     const linhasHTML = dadosGlobais.map(item => `
                         <tr>
                             <td class="fw-bold">${item.funcionario}</td>
+                            <td class="fw-bold">${item.matricula}</td>
                             <td><span class="badge bg-light text-dark border">${item.funcao || 'Não inf.'}</span></td>
                             <td>${item.origemObra}</td>
                             <td class="text-end text-muted"><small>#${item.idRelatorio}</small></td>
