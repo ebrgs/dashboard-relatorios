@@ -286,7 +286,7 @@
         function exportarExcel() {
             if (dadosGlobais.length === 0) return alert("Sem dados para exportar");
 
-            let csv = "Funcionario;Funcao;Obra;Data;ID_Relatorio\n";
+            let csv = "Funcionario;matricula/tag;Funcao;Obra;Data;ID_Relatorio\n";
 
             dadosGlobais.forEach(row => {
                 // Tratamento simples para evitar quebra de CSV se tiver ponto e vírgula no nome
