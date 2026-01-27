@@ -147,9 +147,7 @@ app.get('/api/colaboradores', autenticarToken, async (req, res) => {
             const relatorio = r.conteudoCompleto;
             
             // Tenta pegar o nome de vários lugares possíveis para garantir
-            const nomeModelo = (relatorio.modelo && relatorio.modelo.nome) || 
-                               (r.meta && r.meta.modeloNome) || 
-                               "Nome Desconhecido";
+            const nomeModelo = relatorio.modeloDeRelatorio.descricao;
 
             // --- ESPIÃO LIGADO (Vai aparecer no Log do Render) ---
             console.log(`🔎 Relatório ID ${r.meta.relatorioId} - Nome: "${nomeModelo}"`);
