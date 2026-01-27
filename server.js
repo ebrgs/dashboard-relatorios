@@ -145,11 +145,23 @@ app.get('/api/colaboradores', autenticarToken, async (req, res) => {
         // --- AQUI ESTÁ A LÓGICA NOVA (MÃO DE OBRA + EQUIPAMENTOS) ---
         const todosColaboradores = sucessos.flatMap(r => {
             const relatorio = r.conteudoCompleto;
-            const nomeModelo = r.meta.modeloNome || ""; // Pega o nome do modelo que salvamos antes
             
-            // Verifica se é Parte Diária (Maiúsculo ou minúsculo)
-            const ehParteDiaria = nomeModelo.toLowerCase().includes("parte diária") || 
-                                  nomeModelo.toLowerCase().includes("parte diaria");
+            // Tenta pegar o nome de vários lugares possíveis para garantir
+            const nomeModelo = (relatorio.modelo && relatorio.modelo.nome) || 
+                               (r.meta && r.meta.modeloNome) || 
+                               "Nome Desconhecido";
+
+            // --- ESPIÃO LIGADO (Vai aparecer no Log do Render) ---
+            console.log(`🔎 Relatório ID ${r.meta.relatorioId} - Nome: "${nomeModelo}"`);
+
+            // Normaliza para minúsculas para facilitar a comparação
+            const nomeParaBusca = nomeModelo.toLowerCase();
+            
+            // Verifica variações comuns de nome
+            const ehParteDiaria = nomeParaBusca.includes("parte diária") || 
+                                  nomeParaBusca.includes("parte diaria") ||
+                                  nomeParaBusca.includes("rdo") ||
+                                  nomeParaBusca.includes("diario");
 
             let recursosDesteRelatorio = [];
 
@@ -161,23 +173,28 @@ app.get('/api/colaboradores', autenticarToken, async (req, res) => {
                 origemObra: r.meta.obraNome,
                 idRelatorio: r.meta.relatorioId,
                 data: data,
-                tipo: 'Pessoa' // Só pra controle interno
+                tipo: 'Pessoa'
             }));
             recursosDesteRelatorio.push(...pessoasFormatadas);
 
-            // 2. Busca Equipamentos (Só se for Parte Diária)
+            // 2. Busca Equipamentos
             if (ehParteDiaria) {
-                // ESPIÃO: Isso vai aparecer no Log do Render pra te mostrar os campos
-                console.log(`🚜 Parte Diária detectada em ${r.meta.obraNome}. Campos disponíveis:`, Object.keys(relatorio));
-
-                // Tenta achar a lista de equipamentos (verifique o nome no log se não funcionar)
-                const listaEquipamentos = relatorio.equipamentos || relatorio.maquinario || [];
+                // Tenta achar a lista com nomes diferentes
+                const listaEquipamentos = relatorio.equipamentos || 
+                                          relatorio.maquinario || 
+                                          relatorio.ativos || 
+                                          [];
+                
+                if (listaEquipamentos.length > 0) {
+                    console.log(`🚜 ACHEI EQUIPAMENTOS na obra ${r.meta.obraNome}! Quantidade: ${listaEquipamentos.length}`);
+                } else {
+                    // Se entrou no IF mas não achou equipamentos, avisa pra gente saber se o campo tem outro nome
+                    console.log(`⚠️ É Parte Diária ("${nomeModelo}"), mas a lista de 'equipamentos' veio vazia. Campos do JSON:`, Object.keys(relatorio));
+                }
 
                 const equipamentosFormatados = listaEquipamentos.map(equip => ({
-                    // Truque: O nome da máquina vai na coluna "Funcionário" da tabela
                     funcionario: equip.nome || equip.patrimonio || "Equipamento Sem Nome",
-                    // Se tiver operador vinculado mostra, senão mostra "Maquinário"
-                    funcao: equip.operador ? `Operador: ${equip.operador.nome}` : "Maquinário",
+                    funcao: equip.operador ? `Op: ${equip.operador.nome}` : "Maquinário",
                     origemObra: r.meta.obraNome,
                     idRelatorio: r.meta.relatorioId,
                     data: data,
