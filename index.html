@@ -293,7 +293,7 @@
                 const func = row.funcionario ? row.funcionario.replace(/;/g, ' ') : '';
                 const obra = row.origemObra ? row.origemObra.replace(/;/g, ' ') : '';
                 
-                csv += `${func};${row.funcao};${obra};${row.data};${row.idRelatorio}\n`;
+                csv += `${func};${row.matricula};${row.funcao};${obra};${row.data};${row.idRelatorio}\n`;
             });
 
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
