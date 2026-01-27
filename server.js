@@ -158,7 +158,6 @@ app.get('/api/colaboradores', autenticarToken, async (req, res) => {
             // Verifica variações comuns de nome
             const ehParteDiaria = nomeParaBusca.includes("parte diária") || 
                                   nomeParaBusca.includes("parte diaria") ||
-                                  nomeParaBusca.includes("rdo") ||
                                   nomeParaBusca.includes("diario");
 
             let recursosDesteRelatorio = [];
@@ -169,7 +168,7 @@ app.get('/api/colaboradores', autenticarToken, async (req, res) => {
                 funcionario: pessoa.nome,
                 funcao: pessoa.funcao,
                 origemObra: r.meta.obraNome,
-                idRelatorio: r.meta.relatorioId,
+                idRelatorio: r.meta.numero,
                 data: data,
                 tipo: 'Pessoa'
             }));
@@ -178,10 +177,7 @@ app.get('/api/colaboradores', autenticarToken, async (req, res) => {
             // 2. Busca Equipamentos
             if (ehParteDiaria) {
                 // Tenta achar a lista com nomes diferentes
-                const listaEquipamentos = relatorio.equipamentos || 
-                                          relatorio.maquinario || 
-                                          relatorio.ativos || 
-                                          [];
+                const listaEquipamentos = relatorio.equipamentos || [];
                 
                 if (listaEquipamentos.length > 0) {
                     console.log(`🚜 ACHEI EQUIPAMENTOS na obra ${r.meta.obraNome}! Quantidade: ${listaEquipamentos.length}`);
@@ -191,10 +187,10 @@ app.get('/api/colaboradores', autenticarToken, async (req, res) => {
                 }
 
                 const equipamentosFormatados = listaEquipamentos.map(equip => ({
-                    funcionario: equip.nome || equip.patrimonio || "Equipamento Sem Nome",
+                    funcionario: equip.descricao || "Equipamento Sem Nome",
                     funcao: equip.operador ? `Op: ${equip.operador.nome}` : "Maquinário",
                     origemObra: r.meta.obraNome,
-                    idRelatorio: r.meta.relatorioId,
+                    idRelatorio: r.meta.numero,
                     data: data,
                     tipo: 'Equipamento'
                 }));
