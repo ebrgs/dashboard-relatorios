@@ -189,6 +189,7 @@ app.get('/api/colaboradores', autenticarToken, async (req, res) => {
 
                 const equipamentosFormatados = listaEquipamentos.map(equip => ({
                     funcionario: equip.descricao || "Equipamento Sem Nome",
+                    matricula: equip.descricao.substring(equip.descricao.indexOf('-') + 1),
                     funcao: equip.operador ? `Op: ${equip.operador.nome}` : "Maquinário",
                     origemObra: r.meta.obraNome,
                     idRelatorio: relatorio.numero,
