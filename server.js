@@ -3,26 +3,23 @@ import express from 'express';
 import cors from 'cors';
 import pLimit from "p-limit";
 import { api } from "./api.js";
-import pg from 'pg'; // Usando pacote 'pg' em vez de sqlite
+import pg from 'pg';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
 const { Pool } = pg;
 const app = express();
-const PORT = process.env.PORT || 3000; // Render define a porta automaticamente
-const LIMITE_REQUISICOES_SIMULTANEAS = 2;
+const PORT = process.env.PORT || 3000;
+const LIMITE_REQUISICOES_SIMULTANEAS = 2; // Mantido em 2 para não travar no Render
 const JWT_SECRET = process.env.JWT_SECRET;
 
-app.timeout = 300000;
-
-// --- CONEXÃO COM POSTGRESQL ---
-const connectionString = process.env.DATABASE_URL;
+app.timeout = 300000; // 5 minutos de timeout global
 
 app.use(cors());
 app.use(express.json());
 
 // --- CONEXÃO COM POSTGRESQL ---
-// O Render fornece a DATABASE_URL automaticamente nas variáveis de ambiente
+const connectionString = process.env.DATABASE_URL;
 const usarSSL = connectionString && connectionString.includes('render.com');
 
 const pool = new Pool({
@@ -30,7 +27,6 @@ const pool = new Pool({
     ssl: usarSSL ? { rejectUnauthorized: false } : false
 });
 
-// Teste de conexão ao iniciar
 pool.connect()
     .then(() => console.log('🐘 PostgreSQL conectado com sucesso!'))
     .catch(err => console.error('Erro ao conectar no PostgreSQL:', err));
@@ -43,27 +39,10 @@ async function buscarTodasObras() {
     return response.data;
 }
 
-// async function buscarListaRelatoriosDaObra(obra, dataAlvo) {
-//     try {
-//         const response = await api.get(`/obras/${obra._id}/relatorios`, {
-//             params: { dataInicio: dataAlvo, dataFim: dataAlvo }
-//         });
-//         const lista = Array.isArray(response.data) ? response.data : [];
-//         return lista.map(relatorioResumido => ({
-//             obraId: obra._id,
-//             obraNome: obra.nome,
-//             relatorioId: relatorioResumido._id,
-//             data: dataAlvo
-//         }));
-//     } catch (error) {
-//         return [];
-//     }
-// }
 async function buscarListaRelatoriosDaObra(obra, dataAlvo) {
     try {
         console.log(`⏳ Buscando relatórios da obra: ${obra.nome}...`);
         
-        // Adicionamos timeout na chamada do Axios também (30 segundos por requisição)
         const response = await api.get(`/obras/${obra._id}/relatorios`, {
             params: { dataInicio: dataAlvo, dataFim: dataAlvo },
             timeout: 30000 
@@ -81,14 +60,15 @@ async function buscarListaRelatoriosDaObra(obra, dataAlvo) {
             obraId: obra._id,
             obraNome: obra.nome,
             relatorioId: relatorioResumido._id,
-            data: dataAlvo
+            data: dataAlvo,
+            // Importante: Passamos o modelo/nome do relatório aqui para verificar depois
+            modeloNome: relatorioResumido.modelo ? relatorioResumido.modelo.nome : "" 
         }));
 
     } catch (error) {
-        // Agora vamos ver o erro real no Log do Render
         const msgErro = error.response ? `Status ${error.response.status}` : error.message;
         console.error(`❌ ERRO na Obra ${obra.nome}: ${msgErro}`);
-        return []; // Retorna vazio para não travar o processo todo
+        return []; 
     }
 }
 
@@ -126,7 +106,6 @@ app.post('/auth/login', async (req, res) => {
     const { username, password } = req.body;
 
     try {
-        // MUDANÇA: Sintaxe $1 em vez de ?
         const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
         const user = result.rows[0];
 
@@ -163,16 +142,54 @@ app.get('/api/colaboradores', autenticarToken, async (req, res) => {
         const sucessos = resultadosDetalhados.filter(r => r.status === 'sucesso');
         const falhas = resultadosDetalhados.filter(r => r.status === 'erro');
 
+        // --- AQUI ESTÁ A LÓGICA NOVA (MÃO DE OBRA + EQUIPAMENTOS) ---
         const todosColaboradores = sucessos.flatMap(r => {
-            const listaPessoas = r.conteudoCompleto.maoDeObra?.personalizada || [];
-            return listaPessoas.map(pessoa => ({
+            const relatorio = r.conteudoCompleto;
+            const nomeModelo = r.meta.modeloNome || ""; // Pega o nome do modelo que salvamos antes
+            
+            // Verifica se é Parte Diária (Maiúsculo ou minúsculo)
+            const ehParteDiaria = nomeModelo.toLowerCase().includes("parte diária") || 
+                                  nomeModelo.toLowerCase().includes("parte diaria");
+
+            let recursosDesteRelatorio = [];
+
+            // 1. Busca Mão de Obra (Igual antes)
+            const listaPessoas = relatorio.maoDeObra?.personalizada || [];
+            const pessoasFormatadas = listaPessoas.map(pessoa => ({
                 funcionario: pessoa.nome,
                 funcao: pessoa.funcao,
                 origemObra: r.meta.obraNome,
                 idRelatorio: r.meta.relatorioId,
-                data: data
+                data: data,
+                tipo: 'Pessoa' // Só pra controle interno
             }));
+            recursosDesteRelatorio.push(...pessoasFormatadas);
+
+            // 2. Busca Equipamentos (Só se for Parte Diária)
+            if (ehParteDiaria) {
+                // ESPIÃO: Isso vai aparecer no Log do Render pra te mostrar os campos
+                console.log(`🚜 Parte Diária detectada em ${r.meta.obraNome}. Campos disponíveis:`, Object.keys(relatorio));
+
+                // Tenta achar a lista de equipamentos (verifique o nome no log se não funcionar)
+                const listaEquipamentos = relatorio.equipamentos || relatorio.maquinario || [];
+
+                const equipamentosFormatados = listaEquipamentos.map(equip => ({
+                    // Truque: O nome da máquina vai na coluna "Funcionário" da tabela
+                    funcionario: equip.nome || equip.patrimonio || "Equipamento Sem Nome",
+                    // Se tiver operador vinculado mostra, senão mostra "Maquinário"
+                    funcao: equip.operador ? `Operador: ${equip.operador.nome}` : "Maquinário",
+                    origemObra: r.meta.obraNome,
+                    idRelatorio: r.meta.relatorioId,
+                    data: data,
+                    tipo: 'Equipamento'
+                }));
+
+                recursosDesteRelatorio.push(...equipamentosFormatados);
+            }
+
+            return recursosDesteRelatorio;
         });
+        // -------------------------------------------------------------
 
         res.json({
             resumo: {

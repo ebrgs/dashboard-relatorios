@@ -16,6 +16,13 @@
         
         .card-resumo { transition: transform 0.2s; }
         .card-resumo:hover { transform: translateY(-5px); }
+
+        button:disabled {
+            background-color: #cccccc !important; /* Fica cinza */
+            color: #666666 !important;
+            cursor: not-allowed; /* O mouse vira um sinal de proibido */
+            opacity: 0.7;
+        }
     </style>
 </head>
 <body class="bg-light">
@@ -39,7 +46,7 @@
                             <input type="password" id="loginPass" class="form-control form-control-lg" placeholder="******">
                         </div>
                         
-                        <button onclick="fazerLogin()" class="btn btn-primary w-100 btn-lg">Entrar no Sistema</button>
+                        <button type="submit" id="botaoLogin" onclick="fazerLogin(event)" class="btn btn-primary w-100 btn-lg">Entrar no Sistema</button>
                         
                         <div id="msgErro" class="alert alert-danger mt-3 text-center" style="display:none"></div>
                     </div>
@@ -65,7 +72,7 @@
                     <input type="date" id="dataInput" class="form-control form-control-lg">
                 </div>
                 <div class="col-md-3">
-                    <button onclick="buscarDados()" class="btn btn-primary w-100 btn-lg">🔍 Buscar Relatórios</button>
+                    <button id="botaoBuscar" onclick="buscarDados(event)" class="btn btn-primary w-100 btn-lg">🔍 Buscar Relatórios</button>
                 </div>
             </div>
         </div>
@@ -146,13 +153,18 @@
         }
 
         // 2. Função de Login
-        async function fazerLogin() {
+        async function fazerLogin(event) {
+            event.preventDefault();
+
             const user = document.getElementById('loginUser').value;
             const pass = document.getElementById('loginPass').value;
             const msgErro = document.getElementById('msgErro');
+            const btnLogin = document.getElementById('botaoLogin');
 
             // Limpa erros anteriores
-            msgErro.style.display = 'none';
+            msgErro.innerText = '';
+            btnLogin.innerText = '⏳ Acordando servidor...'
+            btnLogin.disabled = true;
 
             try {
                 const res = await fetch(`${API_URL}/auth/login`, {
@@ -164,6 +176,7 @@
                 const data = await res.json();
 
                 if (res.ok) {
+                    btnLogin.innerText = '✅ Sucesso!'
                     localStorage.setItem('token', data.token);
                     localStorage.setItem('username', data.username);
                     document.getElementById('usuarioLogado').innerText = data.username;
@@ -173,8 +186,15 @@
                     msgErro.style.display = 'block';
                 }
             } catch (e) {
+                console.error(e);
                 msgErro.innerText = 'Erro de conexão com o servidor';
                 msgErro.style.display = 'block';
+            } finally {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    btnLogin.disabled = false;
+                    btnLogin.innerText = 'Entrar no Sistema'
+                }
             }
         }
 
@@ -188,11 +208,18 @@
         }
 
         // 3. Função de Buscar Dados (AQUI ESTÁ A MÁGICA DA TABELA)
-        async function buscarDados() {
+        async function buscarDados(event) {
+            event.preventDefault();
             const data = document.getElementById('dataInput').value;
             const token = localStorage.getItem('token');
+            const btnBuscar = document.getElementById('botaoBuscar');
             
-            if (!data) return alert('Selecione uma data!');
+            btnBuscar.disabled = true
+
+            if (!data) {
+                btnBuscar.disabled = false;
+                return alert('Selecione uma data!');
+            } 
 
             // UI Changes
             document.getElementById('loading').style.display = 'block';
@@ -249,6 +276,7 @@
                 alert('Ocorreu um erro: ' + error.message);
             } finally {
                 document.getElementById('loading').style.display = 'none';
+                btnBuscar.disabled = false
             }
         }
 
