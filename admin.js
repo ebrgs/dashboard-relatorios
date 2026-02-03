@@ -49,9 +49,40 @@ async function criarUsuario(usuario, senha) {
     }
 }
 
-const args = process.argv.slice(2);
-if (args.length < 2) {
-    console.log("Use: node admin.js <usuario> <senha>");
-} else {
-    criarUsuario(args[0], args[1]);
-}
+// const args = process.argv.slice(2);
+// if (args.length < 2) {
+//     console.log("Use: node admin.js <usuario> <senha>");
+// } else {
+//     criarUsuario(args[0], args[1]);
+// }
+
+// // Script temporário para criar tabela de funcionários
+// import pg from 'pg';
+// import 'dotenv/config';
+
+// const { Pool } = pg;
+// const connectionString = process.env.DATABASE_URL;
+// const pool = new Pool({
+//     connectionString,
+//     ssl: connectionString.includes('render.com') ? { rejectUnauthorized: false } : false
+// });
+
+// async function criarTabelaFuncionarios() {
+//     try {
+//         await pool.query(`
+//             CREATE TABLE IF NOT EXISTS funcionarios (
+//                 id SERIAL PRIMARY KEY,
+//                 nome VARCHAR(255) UNIQUE NOT NULL,
+//                 cargo VARCHAR(100),
+//                 ativo BOOLEAN DEFAULT TRUE
+//             );
+//         `);
+//         console.log("✅ Tabela 'funcionarios' criada com sucesso!");
+//     } catch (error) {
+//         console.error("❌ Erro:", error);
+//     } finally {
+//         pool.end();
+//     }
+// }
+
+// criarTabelaFuncionarios();

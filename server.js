@@ -190,7 +190,7 @@ app.get('/api/colaboradores', autenticarToken, async (req, res) => {
                 const equipamentosFormatados = listaEquipamentos.map(equip => ({
                     funcionario: equip.descricao || "Equipamento Sem Nome",
                     matricula: equip.descricao.substring(equip.descricao.indexOf('-') + 1),
-                    funcao: equip.operador ? `Op: ${equip.operador.nome}` : "Maquinário",
+                    funcao: relatorio.maoDeObra.personalizada.length >= 1 ? relatorio.maoDeObra.personalizada[0].nome : 'Banheiro',
                     origemObra: r.meta.obraNome,
                     idRelatorio: relatorio.numero,
                     data: data,
@@ -217,6 +217,67 @@ app.get('/api/colaboradores', autenticarToken, async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ erro: 'Erro interno no servidor' });
+    }
+});
+
+// --- ROTAS DE FUNCIONÁRIOS (EFETIVO) ---
+
+// 1. Salvar ou Atualizar Lista (Recebe um Array de nomes)
+app.post('/api/funcionarios/importar', autenticarToken, async (req, res) => {
+    const { listaNomes } = req.body; // Espera: { "listaNomes": ["João", "Maria"] }
+
+    if (!listaNomes || !Array.isArray(listaNomes)) {
+        return res.status(400).json({ erro: "Lista inválida" });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        
+        // Opcional: Limpar lista antiga antes de por a nova? 
+        // Vamos apenas INSERIR e ignorar se já existir (ON CONFLICT DO NOTHING)
+        for (const nome of listaNomes) {
+            await client.query(`
+                INSERT INTO funcionarios (nome, ativo) VALUES ($1, true)
+                ON CONFLICT (nome) DO NOTHING
+            `, [nome]);
+        }
+
+        await client.query('COMMIT');
+        res.json({ mensagem: "Lista importada com sucesso!" });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error(error);
+        res.status(500).json({ erro: "Erro ao importar lista" });
+    } finally {
+        client.release();
+    }
+});
+
+// 2. Buscar Lista de Funcionários Ativos
+app.get('/api/funcionarios', autenticarToken, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT nome FROM funcionarios WHERE ativo = true ORDER BY nome ASC');
+        // Retorna só um array de strings: ["Ana", "Carlos", ...]
+        const lista = result.rows.map(row => row.nome);
+        res.json(lista);
+    } catch (error) {
+        res.status(500).json({ erro: "Erro ao buscar funcionários" });
+    }
+});
+
+// 3. Rota para Excluir Funcionário
+app.delete('/api/funcionarios', autenticarToken, async (req, res) => {
+    const { nome } = req.body; // Espera: { "nome": "João da Silva" }
+
+    if (!nome) return res.status(400).json({ erro: "Nome obrigatório" });
+
+    try {
+        await pool.query('DELETE FROM funcionarios WHERE nome = $1', [nome]);
+        res.json({ mensagem: "Funcionário removido com sucesso!" });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ erro: "Erro ao excluir" });
     }
 });
 
