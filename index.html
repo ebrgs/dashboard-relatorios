@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Seguro de Obras</title>
+    <title>ObraSync - Gestão</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔄</text></svg>">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         .tela { display: none; } /* Esconde todas as telas por padrão */
@@ -48,6 +49,31 @@
             position: relative;
             align-items: center;
         }
+        /* LOGOTIPO OBRASYNC */
+        .brand-logo {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; /* Fonte moderna */
+            font-weight: 800;      /* Bem grosso */
+            letter-spacing: -1px;  /* Letras juntinhas */
+            color: #0d6efd;        /* Azul Bootstrap (Pode mudar para #ffc107 Amarelo se preferir obra) */
+            text-transform: uppercase;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;              /* Espaço entre o ícone e o texto */
+        }
+
+        .brand-sync {
+            color: #495057;        /* Cinza escuro */
+            font-weight: 300;      /* Bem fino */
+        }
+
+        /* Animaçãozinha sutil no ícone de Sync */
+        .brand-icon {
+            display: inline-block;
+            transition: transform 0.5s ease;
+        }
+        .brand-logo:hover .brand-icon {
+            transform: rotate(180deg); /* Gira quando passa o mouse */
+        }
     </style>
 </head>
 <body class="bg-light">
@@ -58,8 +84,11 @@
                 <div class="card shadow-lg border-0">
                     <div class="card-body p-5">
                         <div class="text-center mb-4">
-                            <h3>🔐 Acesso Restrito</h3>
-                            <p class="text-muted">Faça login para acessar os relatórios</p>
+                            <h2 class="brand-logo mb-0" style="font-size: 2.5rem;">
+                                <span class="brand-icon">🔄</span> 
+                                Obra<span class="brand-sync">Sync</span>
+                            </h2>
+                            <p class="text-muted mt-2">Gestão Inteligente de Recursos</p>
                         </div>
                         
                         <div class="mb-3">
@@ -84,8 +113,13 @@
         
         <div class="d-flex justify-content-between align-items-center mb-5 border-bottom pb-3">
             <div>
-                <h1 class="h3 mb-0">📊 Gestão de Mão de Obra</h1>
-                <small class="text-muted">Logado como: <strong id="usuarioLogado">...</strong></small>
+                <h1 class="h3 mb-0 brand-logo" style="font-size: 2rem;">
+                    <span class="brand-icon">🔄</span>
+                    Obra<span class="brand-sync">Sync</span>
+                </h1>
+                <small class="text-muted d-block mt-1">
+                    Olá, <strong id="usuarioLogado">...</strong> | Setor: <span class="badge bg-secondary">Geral</span>
+                </small>
             </div>
             <button onclick="fazerLogout()" class="btn btn-outline-danger">Sair / Logout</button>
         </div>
