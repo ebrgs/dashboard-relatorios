@@ -324,6 +324,48 @@ app.delete('/api/funcionarios', autenticarToken, async (req, res) => {
     }
 });
 
+// --- ROTAS DE EQUIPAMENTOS (FROTA) ---
+
+// 1. Salvar Lista (Importar)
+app.post('/api/equipamentos/importar', autenticarToken, async (req, res) => {
+    const { listaNomes } = req.body;
+    if (!listaNomes || !Array.isArray(listaNomes)) return res.status(400).json({ erro: "Lista inválida" });
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        for (const nome of listaNomes) {
+            await client.query(`
+                INSERT INTO equipamentos (nome, ativo) VALUES ($1, true)
+                ON CONFLICT (nome) DO NOTHING
+            `, [nome]);
+        }
+        await client.query('COMMIT');
+        res.json({ mensagem: "Frota importada com sucesso!" });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ erro: "Erro ao importar" });
+    } finally { client.release(); }
+});
+
+// 2. Buscar Frota Ativa
+app.get('/api/equipamentos', autenticarToken, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT nome FROM equipamentos WHERE ativo = true ORDER BY nome ASC');
+        const lista = result.rows.map(row => row.nome);
+        res.json(lista);
+    } catch (error) { res.status(500).json({ erro: "Erro ao buscar frota" }); }
+});
+
+// 3. Excluir Equipamento
+app.delete('/api/equipamentos', autenticarToken, async (req, res) => {
+    const { nome } = req.body;
+    try {
+        await pool.query('DELETE FROM equipamentos WHERE nome = $1', [nome]);
+        res.json({ mensagem: "Equipamento removido!" });
+    } catch (error) { res.status(500).json({ erro: "Erro ao excluir" }); }
+});
+
 app.listen(PORT, () => {
     console.log(`🔥 Servidor rodando na porta ${PORT}`);
 });

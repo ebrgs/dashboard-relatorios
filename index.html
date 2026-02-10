@@ -141,11 +141,14 @@
             </div>
 
             <div class="d-flex justify-content-end mb-3">
-                <button onclick="exportarExcel()" class="btn btn-success">
+                <button onclick="exportarExcel()" class="btn btn-success me-2">
                     📥 Baixar Planilha (.csv)
                 </button>
                 <button class="btn btn-warning me-2" data-bs-toggle="modal" data-bs-target="#modalConferencia">
                     🕵️ Conferir Faltas
+                </button>
+                <button class="btn btn-secondary me-2" data-bs-toggle="modal" data-bs-target="#modalEquipamentos">
+                    🚜 Conferir Frota
                 </button>
             </div>
             
@@ -233,6 +236,52 @@
                             </div>
                             <ul id="listaFaltantes" class="list-group list-group-flush border rounded bg-light" style="height: 300px; overflow-y: auto;">
                                 <li class="list-group-item text-muted text-center p-4">Carregue a lista ou cole nomes ao lado para verificar.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal fade" id="modalEquipamentos" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-secondary text-white">
+                    <h5 class="modal-title">🚜 Gestão de Frota</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6 border-end">
+                            <div class="btn-group w-100 mb-3">
+                                <button onclick="alternarModoEquip('conferencia')" class="btn btn-outline-dark active" id="btnModoConfEquip">Conferência</button>
+                                <button onclick="alternarModoEquip('edicao')" class="btn btn-outline-dark" id="btnModoEditEquip">✏️ Editar Frota</button>
+                            </div>
+
+                            <div id="areaConferenciaEquip">
+                                <button onclick="carregarFrotaDoBanco()" class="btn btn-primary w-100 mb-2">📥 Usar Cadastro da Frota</button>
+                                <textarea id="listaEquipInput" class="form-control" rows="5" placeholder="Cole a lista de equipamentos..."></textarea>
+                                <button onclick="cadastrarEquipNovos()" class="btn btn-outline-success w-100 mt-2 btn-sm">💾 Salvar na Frota</button>
+                            </div>
+
+                            <div id="areaEdicaoEquip" style="display:none; max-height: 400px; overflow-y: auto;">
+                                <ul id="listaGerenciamentoEquip" class="list-group"></ul>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label class="fw-bold text-danger">⚠️ Equipamentos Parados/Faltantes:</label>
+                                <button onclick="verificarFaltasEquip()" class="btn btn-success btn-sm">🔄 Verificar</button>
+                            </div>
+
+                            <div class="btn-group w-100 mb-2">
+                                <button onclick="copiarEquipFaltantes()" class="btn btn-outline-secondary btn-sm">📋 Copiar</button>
+                                <button onclick="baixarEquipExcel()" class="btn btn-outline-success btn-sm">📥 Excel</button>
+                            </div>
+
+                            <ul id="listaFaltantesEquip" class="list-group list-group-flush border rounded bg-light" style="height: 300px; overflow-y: auto;">
+                                <li class="list-group-item text-muted text-center p-4">Aguardando verificação...</li>
                             </ul>
                         </div>
                     </div>
@@ -668,6 +717,136 @@ async function excluirFuncionario(nome) {
         console.error(e);
         alert("Erro de conexão.");
     }
+}
+// --- LÓGICA DE EQUIPAMENTOS ---
+
+let listaEquipGlobal = [];
+
+// 1. Alternar Abas
+async function alternarModoEquip(modo) {
+    const areaConf = document.getElementById('areaConferenciaEquip');
+    const areaEdit = document.getElementById('areaEdicaoEquip');
+    
+    if (modo === 'conferencia') {
+        areaConf.style.display = 'block';
+        areaEdit.style.display = 'none';
+        document.getElementById('btnModoConfEquip').classList.add('active');
+        document.getElementById('btnModoEditEquip').classList.remove('active');
+    } else {
+        areaConf.style.display = 'none';
+        areaEdit.style.display = 'block';
+        document.getElementById('btnModoConfEquip').classList.remove('active');
+        document.getElementById('btnModoEditEquip').classList.add('active');
+        await renderizarEdicaoEquip();
+    }
+}
+
+// 2. Carregar e Verificar (A Mágica acontece aqui)
+async function carregarFrotaDoBanco() {
+    const token = localStorage.getItem('token');
+    const btn = event.target;
+    btn.innerText = "⏳ Buscando...";
+    
+    try {
+        const res = await fetch(`${API_URL}/api/equipamentos`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const lista = await res.json();
+        document.getElementById('listaEquipInput').value = lista.join('\n');
+        verificarFaltasEquip(); // Já verifica automático
+        btn.innerText = "✅ Frota Carregada!";
+        setTimeout(() => btn.innerText = "📥 Usar Cadastro da Frota", 2000);
+    } catch (e) { alert("Erro ao buscar frota."); }
+}
+
+function verificarFaltasEquip() {
+    const inputTexto = document.getElementById('listaEquipInput').value;
+    if (!inputTexto.trim()) return alert("Lista vazia!");
+
+    const listaEsperada = inputTexto.split('\n').filter(n => n.trim().length > 0);
+
+    // --- AQUI MUDA: Filtramos apenas 'Equipamento' ---
+    const listaPresentes = dadosGlobais
+        .filter(item => item.tipo === 'Equipamento') 
+        .map(item => normalizarTexto(item.funcionario)); // Lembre que salvamos o nome da máquina no campo 'funcionario'
+
+    const faltantes = listaEsperada.filter(nomeOriginal => {
+        return !listaPresentes.includes(normalizarTexto(nomeOriginal));
+    });
+
+    listaEquipGlobal = faltantes; // Salva para exportar
+
+    const ul = document.getElementById('listaFaltantesEquip');
+    ul.innerHTML = '';
+    
+    if (faltantes.length === 0) {
+        ul.innerHTML = '<li class="list-group-item list-group-item-success">✅ Toda a frota operou hoje!</li>';
+    } else {
+        faltantes.forEach(nome => {
+            ul.innerHTML += `<li class="list-group-item list-group-item-danger">🚜 ${nome}</li>`;
+        });
+    }
+}
+
+// 3. Cadastrar Novos
+async function cadastrarEquipNovos() {
+    const texto = document.getElementById('listaEquipInput').value;
+    const lista = texto.split('\n').filter(n => n.trim().length > 0);
+    const token = localStorage.getItem('token');
+
+    await fetch(`${API_URL}/api/equipamentos/importar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ listaNomes: lista })
+    });
+    alert("✅ Frota atualizada!");
+}
+
+// 4. Gerenciar (Excluir)
+async function renderizarEdicaoEquip() {
+    const ul = document.getElementById('listaGerenciamentoEquip');
+    ul.innerHTML = 'Carregando...';
+    const token = localStorage.getItem('token');
+    
+    const res = await fetch(`${API_URL}/api/equipamentos`, { headers: { 'Authorization': `Bearer ${token}` } });
+    const lista = await res.json();
+    
+    ul.innerHTML = '';
+    lista.forEach(nome => {
+        ul.innerHTML += `
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                ${nome}
+                <button onclick="excluirEquip('${nome}')" class="btn btn-sm btn-outline-danger">🗑️</button>
+            </li>`;
+    });
+}
+
+async function excluirEquip(nome) {
+    if (!confirm(`Remover "${nome}" da frota?`)) return;
+    const token = localStorage.getItem('token');
+    await fetch(`${API_URL}/api/equipamentos`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ nome: nome })
+    });
+    renderizarEdicaoEquip();
+}
+
+// 5. Exportar
+function copiarEquipFaltantes() {
+    if (listaEquipGlobal.length === 0) return alert("Nada para copiar.");
+    const texto = "⚠️ *FROTA PARADA HOJE* ⚠️\nData: " + document.getElementById('dataInput').value + "\n\n" + 
+                  listaEquipGlobal.map(nome => "- " + nome).join('\n');
+    navigator.clipboard.writeText(texto).then(() => alert("Copiado!"));
+}
+
+function baixarEquipExcel() {
+    if (listaEquipGlobal.length === 0) return alert("Nada para baixar.");
+    let csv = "EQUIPAMENTO;STATUS\n";
+    listaEquipGlobal.forEach(n => csv += `${n};PARADO\n`);
+    const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `Frota_Parada_${document.getElementById('dataInput').value}.csv`;
+    link.click();
 }
 
         // 4. Exportar Excel

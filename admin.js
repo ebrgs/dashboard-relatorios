@@ -166,3 +166,19 @@ const pool = new Pool({
 // }
 
 // criarTabelaFuncionarios();
+
+// async function criarTabelaEquipamentos() {
+//     try {
+//         await pool.query(`
+//             CREATE TABLE IF NOT EXISTS equipamentos (
+//                 id SERIAL PRIMARY KEY,
+//                 nome VARCHAR(255) UNIQUE NOT NULL, -- Ex: 'Escavadeira CAT 320', 'Caminhão Pipa'
+//                 ativo BOOLEAN DEFAULT TRUE
+//             );
+//         `);
+//         console.log("✅ Tabela 'equipamentos' criada com sucesso!");
+//     } catch (error) { console.error(error); } 
+//     finally { pool.end(); }
+// }
+
+// criarTabelaEquipamentos();
