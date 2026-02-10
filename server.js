@@ -6,12 +6,14 @@ import { api } from "./api.js";
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import NodeCache from 'node-cache';
 
 const { Pool } = pg;
 const app = express();
 const PORT = process.env.PORT || 3000;
 const LIMITE_REQUISICOES_SIMULTANEAS = 2; // Mantido em 2 para não travar no Render
 const JWT_SECRET = process.env.JWT_SECRET;
+const cacheDoSistema = new NodeCache({ stdTTL: 1200 });
 
 app.timeout = 300000; // 5 minutos de timeout global
 
@@ -32,11 +34,36 @@ pool.connect()
     .catch(err => console.error('Erro ao conectar no PostgreSQL:', err));
 
 
-// --- FUNÇÕES DA API EXTERNA ---
-async function buscarTodasObras() {
-    console.log('📡 Buscando obras...');
+// 1. Nova versão da função buscarTodasObras
+async function buscarTodasObras(filtroSetor = null) {
+    console.log('📡 Buscando lista de obras na API...');
+    
+    // Busca tudo da API Externa
     const response = await api.get('/obras');
-    return response.data;
+    let todasObrasApi = response.data; // Array com todas as obras
+
+    // Busca sua configuração no Banco
+    const configRes = await pool.query('SELECT * FROM obras_config');
+    const configs = configRes.rows; // Array do banco
+
+    // Cria um mapa para acesso rápido: { 'ID_123': 'Civil', 'ID_456': 'Elétrica' }
+    const mapaSetores = {};
+    configs.forEach(c => mapaSetores[c.id_externo_obra] = c.setor);
+
+    // Adiciona o setor em cada obra da API
+    let obrasMapeadas = todasObrasApi.map(obra => ({
+        ...obra, // Mantém dados originais (_id, nome, etc)
+        setor: mapaSetores[obra._id] || 'Geral' // Se não tiver no banco, vira 'Geral'
+    }));
+
+    // SE TIVER FILTRO, LIMPA A LISTA AGORA (Otimização de Performance!)
+    if (filtroSetor && filtroSetor !== 'Todos') {
+        const totalAntes = obrasMapeadas.length;
+        obrasMapeadas = obrasMapeadas.filter(o => o.setor === filtroSetor);
+        console.log(`🧹 Filtrando por Setor '${filtroSetor}': Reduziu de ${totalAntes} para ${obrasMapeadas.length} obras.`);
+    }
+
+    return obrasMapeadas;
 }
 
 async function buscarListaRelatoriosDaObra(obra, dataAlvo) {
@@ -125,12 +152,22 @@ app.post('/auth/login', async (req, res) => {
 
 app.get('/api/colaboradores', autenticarToken, async (req, res) => {
     try {
-        const { data } = req.query;
+        const { data, forcar, setor } = req.query;
         if (!data) return res.status(400).json({ erro: 'Data obrigatória' });
+
+        // --- 1. VERIFICA SE JÁ TEM NO CACHE ---
+        const setorCache = setor || 'Todos';
+        const chaveCache = `dados_${data}_${setorCache}`;
+
+        // Se tem no cache E o usuário NÃO pediu para forçar atualização
+        if (cacheDoSistema.has(chaveCache) && forcar !== 'true') {
+            console.log(`⚡ Retornando dados do CACHE para: ${data}`);
+            return res.json(cacheDoSistema.get(chaveCache));
+        }
 
         console.log(`🚀 Usuário ${req.user.username} pediu dados de: ${data}`);
 
-        const obras = await buscarTodasObras();
+        const obras = await buscarTodasObras(setor);
         const limit = pLimit(LIMITE_REQUISICOES_SIMULTANEAS);
         
         const promessasListagem = obras.map(obra => limit(() => buscarListaRelatoriosDaObra(obra, data)));
@@ -171,7 +208,8 @@ app.get('/api/colaboradores', autenticarToken, async (req, res) => {
                 origemObra: r.meta.obraNome,
                 idRelatorio: relatorio.numero,
                 data: data,
-                tipo: 'Pessoa'
+                tipo: 'Pessoa',
+                statusRelatorio: relatorio.status.descricao
             }));
             recursosDesteRelatorio.push(...pessoasFormatadas);
 
@@ -194,7 +232,8 @@ app.get('/api/colaboradores', autenticarToken, async (req, res) => {
                     origemObra: r.meta.obraNome,
                     idRelatorio: relatorio.numero,
                     data: data,
-                    tipo: 'Equipamento'
+                    tipo: 'Equipamento',
+                    statusRelatorio: relatorio.status.descricao
                 }));
 
                 recursosDesteRelatorio.push(...equipamentosFormatados);
@@ -204,7 +243,7 @@ app.get('/api/colaboradores', autenticarToken, async (req, res) => {
         });
         // -------------------------------------------------------------
 
-        res.json({
+        const resultadoFinal = {
             resumo: {
                 obras: obras.length,
                 relatorios: todosRelatoriosEncontrados.length,
@@ -212,7 +251,11 @@ app.get('/api/colaboradores', autenticarToken, async (req, res) => {
                 falhas: falhas.length
             },
             listaColaboradores: todosColaboradores
-        });
+        }
+
+        cacheDoSistema.set(chaveCache, resultadoFinal);
+
+        res.json(resultadoFinal);
 
     } catch (error) {
         console.error(error);
