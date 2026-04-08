@@ -29,6 +29,10 @@ const pool = new Pool({
     ssl: usarSSL ? { rejectUnauthorized: false } : false
 });
 
+pool.on('error', (err, client) => {
+    console.log('⚠️ O Neon derrubou uma conexão ociosa (Normal em Serverless). Ignorando...', err.message)
+})
+
 pool.connect()
     .then(() => console.log('🐘 PostgreSQL conectado com sucesso!'))
     .catch(err => console.error('Erro ao conectar no PostgreSQL:', err));
