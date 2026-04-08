@@ -17,7 +17,13 @@ const cacheDoSistema = new NodeCache({ stdTTL: 1200 });
 
 app.timeout = 300000; // 5 minutos de timeout global
 
-app.use(cors());
+app.use(cors({
+    origin: '*', // Permite o GitHub Pages acessar
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Permite todos os verbos
+    allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization']
+}));
+
+app.options('*', cors());
 app.use(express.json());
 
 // --- CONEXÃO COM POSTGRESQL ---
