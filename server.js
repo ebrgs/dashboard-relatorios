@@ -33,9 +33,9 @@ pool.on('error', (err, client) => {
     console.log('⚠️ O Neon derrubou uma conexão ociosa (Normal em Serverless). Ignorando...', err.message)
 })
 
-pool.connect()
-    .then(() => console.log('🐘 PostgreSQL conectado com sucesso!'))
-    .catch(err => console.error('Erro ao conectar no PostgreSQL:', err));
+// pool.connect()
+//     .then(() => console.log('🐘 PostgreSQL conectado com sucesso!'))
+//     .catch(err => console.error('Erro ao conectar no PostgreSQL:', err));
 
 
 // 1. Nova versão da função buscarTodasObras
