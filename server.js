@@ -26,17 +26,16 @@ const usarSSL = connectionString && connectionString.includes('render.com');
 
 const pool = new Pool({
     connectionString: connectionString,
-    ssl: usarSSL ? { rejectUnauthorized: false } : false
+    ssl: { rejectUnauthorized: false }, // <-- FORÇAMOS O SSL PARA O NEON AQUI
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 5000,
+    max: 10
 });
 
+// Amortecedor do Pool
 pool.on('error', (err, client) => {
-    console.log('⚠️ O Neon derrubou uma conexão ociosa (Normal em Serverless). Ignorando...', err.message)
-})
-
-// pool.connect()
-//     .then(() => console.log('🐘 PostgreSQL conectado com sucesso!'))
-//     .catch(err => console.error('Erro ao conectar no PostgreSQL:', err));
-
+    console.error('⚠️ Erro no Pool do banco (ignorado):', err.message);
+});
 
 // 1. Nova versão da função buscarTodasObras
 async function buscarTodasObras(filtroSetor = null) {
