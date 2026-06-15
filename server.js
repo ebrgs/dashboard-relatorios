@@ -33,7 +33,7 @@ const usarSSL = connectionString && connectionString.includes('render.com');
 const pool = new Pool({
     connectionString: connectionString,
     ssl: { rejectUnauthorized: false }, // <-- FORÇAMOS O SSL PARA O NEON AQUI
-    idleTimeoutMillis: 30000,
+    idleTimeoutMillis: 90000,
     connectionTimeoutMillis: 5000,
     max: 10
 });
