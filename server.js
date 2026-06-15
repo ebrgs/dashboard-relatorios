@@ -82,7 +82,7 @@ async function buscarListaRelatoriosDaObra(obra, dataAlvo) {
         
         const response = await api.get(`/obras/${obra._id}/relatorios`, {
             params: { dataInicio: dataAlvo, dataFim: dataAlvo },
-            timeout: 30000 
+            timeout: 90000 
         });
 
         const lista = Array.isArray(response.data) ? response.data : [];
