@@ -43,7 +43,6 @@ pool.on('error', (err, client) => {
     console.error('⚠️ Erro no Pool do banco (ignorado):', err.message);
 });
 
-pool.connect()
 
 // 1. Nova versão da função buscarTodasObras
 async function buscarTodasObras(filtroSetor = null) {
